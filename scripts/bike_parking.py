@@ -58,14 +58,8 @@ BICYCLE_CLASS_ID = 0
 # 座標は 0〜320 スケール。頂点は時計回りで列挙。
 # =====================================================================
 NO_PARKING_ZONES: list[dict] = [
-    {
-        "name": "aisle",
-        "polygon": [(0, 230), (320, 270), (320, 320), (0, 320)],  # 手前の通路（台形）
-    },
-    {
-        "name": "left_open",
-        "polygon": [(0, 0), (110, 0), (110, 230), (0, 230)],      # 左側スペース外
-    },
+    {"name": "zone_1", "polygon": [(1, 251), (57, 319), (2, 318)]},
+    {"name": "zone_2", "polygon": [(80, 319), (220, 212), (171, 190), (181, 186), (228, 204), (253, 194), (274, 203), (266, 319)]},
 ]
 # =====================================================================
 
@@ -265,12 +259,11 @@ def plot_heatmap(all_dets: list[list[Detection]]) -> None:
     plt.imshow(grid, cmap="hot", origin="upper")
     plt.colorbar(label="Cumulative detection count")
     for z in NO_PARKING_ZONES:
-        rect = patches.Rectangle(
-            (z["X"], z["Y"]), z["x"] - z["X"], z["y"] - z["Y"],
-            linewidth=2, edgecolor="cyan", facecolor="none", linestyle="--",
-        )
-        plt.gca().add_patch(rect)
-        plt.text(z["X"], z["Y"] - 5, z["name"], color="cyan", fontsize=8)
+        poly = patches.Polygon(z["polygon"], closed=True,
+                               linewidth=2, edgecolor="cyan", facecolor="none", linestyle="--")
+        plt.gca().add_patch(poly)
+        px, py = z["polygon"][0]
+        plt.text(px, py - 5, z["name"], color="cyan", fontsize=8)
     plt.title("Bicycle Heatmap (cyan = no-parking zone)")
     plt.axis("off")
     plt.tight_layout()
