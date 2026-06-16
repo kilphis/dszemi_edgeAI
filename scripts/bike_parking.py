@@ -114,21 +114,23 @@ class TrackedBike:
 # -----------------------------------------------------------------
 # ユーティリティ
 # -----------------------------------------------------------------
-def calc_iou(b1: Detection, zone: dict) -> float:
-    ix1 = max(b1.x1, zone["X"])
-    iy1 = max(b1.y1, zone["Y"])
-    ix2 = min(b1.x2, zone["x"])
-    iy2 = min(b1.y2, zone["y"])
-    inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
-    if inter == 0:
-        return 0.0
-    area_b = (b1.x2 - b1.x1) * (b1.y2 - b1.y1)
-    area_z = (zone["x"] - zone["X"]) * (zone["y"] - zone["Y"])
-    return inter / (area_b + area_z - inter)
+def point_in_polygon(px: float, py: float, polygon: list[tuple]) -> bool:
+    """レイキャスティング法：点(px,py)がポリゴン内部かどうかを判定する。"""
+    inside = False
+    n = len(polygon)
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+        if ((yi > py) != (yj > py)) and (px < (xj - xi) * (py - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside
 
 
 def is_illegal(det: Detection) -> bool:
-    return any(calc_iou(det, z) >= IOU_THRESHOLD for z in NO_PARKING_ZONES)
+    """検出の重心(cx,cy)がいずれかの禁止ゾーンポリゴン内にあれば違法。"""
+    return any(point_in_polygon(det.cx, det.cy, z["polygon"]) for z in NO_PARKING_ZONES)
 
 
 def match_track(det: Detection, tracks: list[TrackedBike]) -> TrackedBike | None:
@@ -302,12 +304,11 @@ def overlay_frame(frame: dict, dets: list[Detection], frame_idx: int, events: li
     ax.axis("off")
 
     for z in NO_PARKING_ZONES:
-        rx1, ry1 = z["X"] * W / 320, z["Y"] * H / 320
-        rx2, ry2 = z["x"] * W / 320, z["y"] * H / 320
-        rect = patches.Rectangle((rx1, ry1), rx2 - rx1, ry2 - ry1,
-                                  linewidth=2, edgecolor="cyan", facecolor="cyan", alpha=0.15)
-        ax.add_patch(rect)
-        ax.text(rx1, ry1, z["name"], color="cyan", fontsize=8)
+        pts = [(px * W / 320, py * H / 320) for px, py in z["polygon"]]
+        poly = patches.Polygon(pts, closed=True,
+                               linewidth=2, edgecolor="cyan", facecolor="cyan", alpha=0.15)
+        ax.add_patch(poly)
+        ax.text(pts[0][0], pts[0][1], z["name"], color="cyan", fontsize=8)
 
     frame_events = {e["track_id"] for e in events if e.get("timestamp") == frame_ts.to_pydatetime()}
 
