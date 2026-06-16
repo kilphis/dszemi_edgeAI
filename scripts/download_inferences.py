@@ -1,5 +1,5 @@
 # /// script
-# dependencies = ["requests", "pyyaml"]
+# dependencies = ["requests", "pyyaml", "flatbuffers"]
 # ///
 """
 AITRIOS Console REST API から画像と推論結果をダウンロードして

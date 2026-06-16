@@ -35,8 +35,8 @@ OUTPUT_DIR   = os.path.join(PROJECT_ROOT, "output")
 # 自転車モデルの推論JSONが届いたらここを変更する
 #   例: DATA_DIR = os.path.join(PROJECT_ROOT, "data", "bike_0620", "inferences", "deserialized_inferences")
 # =====================================================================
-DATA_DIR  = os.path.join(PROJECT_ROOT, "data", "handson_0602", "inferences", "deserialized_inferences")
-IMAGE_DIR = os.path.join(PROJECT_ROOT, "data", "handson_0602", "images")
+DATA_DIR  = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-000000000cc9", "20260616013730349", "inferences", "deserialized_inferences")
+IMAGE_DIR = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-000000000cc9", "20260616013730349", "images")
 # =====================================================================
 
 # =====================================================================
@@ -46,24 +46,26 @@ IMAGE_DIR = os.path.join(PROJECT_ROOT, "data", "handson_0602", "images")
 #       class_map = {0: "bicycle"}
 # =====================================================================
 class_map = {
-    0: "bicycle",   # STUB: 現在はカラスデータ class0 を bicycle として扱う
-    1: "obstacle",  # STUB: class1 を obstacle として扱う（実際は不要かも）
+    0: "bicycle",
 }
 BICYCLE_CLASS_ID = 0
 # =====================================================================
 
 # =====================================================================
 # [STUB 3] 駐輪禁止エリア（座標系: 0〜320）
-# 背景画像（backImage06-05/）を見て実際の座標を決定すること
-#
-# 手順:
-#   1. 背景画像を開いて画像サイズを確認
-#   2. 禁止エリアの左上(X,Y)・右下(x,y)を 0〜320 にスケール換算して入力
-#   3. 複数エリアがあればリストに追加
+# カメラが斜めのため、矩形ではなくポリゴン（多角形）で定義する。
+# pick_zone.py でクリックして頂点を取得 → ここに貼る。
+# 座標は 0〜320 スケール。頂点は時計回りで列挙。
 # =====================================================================
 NO_PARKING_ZONES: list[dict] = [
-    {"name": "zone_A", "X": 0,   "Y": 0,   "x": 80,  "y": 320},  # STUB: 仮の左端エリア
-    {"name": "zone_B", "X": 240, "Y": 0,   "x": 320, "y": 320},  # STUB: 仮の右端エリア
+    {
+        "name": "aisle",
+        "polygon": [(0, 230), (320, 270), (320, 320), (0, 320)],  # 手前の通路（台形）
+    },
+    {
+        "name": "left_open",
+        "polygon": [(0, 0), (110, 0), (110, 230), (0, 230)],      # 左側スペース外
+    },
 ]
 # =====================================================================
 
@@ -71,7 +73,6 @@ NO_PARKING_ZONES: list[dict] = [
 # [STUB 4] 放置自転車の判定パラメータ
 # =====================================================================
 STAY_TIME_THRESHOLD_MINUTES = 60   # この時間（分）を超えたら放置とみなす
-IOU_THRESHOLD = 0.1                # 禁止エリアとの重なり率でこれ以上なら違法
 COORD_MATCH_RADIUS = 30            # 同一自転車と判定する座標ズレの許容値（px, 0〜320基準）
 # =====================================================================
 
@@ -324,7 +325,8 @@ def overlay_frame(frame: dict, dets: list[Detection], frame_idx: int, events: li
                 fontsize=9, weight="bold", bbox=dict(facecolor="white", alpha=0.5, pad=1))
 
     plt.tight_layout()
-    out = os.path.join(OUTPUT_DIR, f"bike_frame_{frame_idx:03d}.png")
+    ts_str = frame_ts.strftime("%Y%m%d_%H%M%S")
+    out = os.path.join(OUTPUT_DIR, f"bike_frame_{frame_idx:03d}_{ts_str}.png")
     plt.savefig(out, dpi=80)
     plt.close(fig)
 
