@@ -69,7 +69,7 @@ def find_image(frame_ts, img_files):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fps", type=float, default=3)
+    parser.add_argument("--fps", type=float, default=1)
     args = parser.parse_args()
 
     frames, img_files = load_data()

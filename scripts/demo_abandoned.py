@@ -107,7 +107,7 @@ def find_image(frame_ts, img_files):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fps",       type=float, default=3)
+    parser.add_argument("--fps",       type=float, default=1)
     parser.add_argument("--threshold", type=float, default=60,
                         help="放置判定の秒数（デフォルト60秒）")
     args = parser.parse_args()
