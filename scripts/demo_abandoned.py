@@ -195,8 +195,8 @@ def main():
             alert_text.set_text("")
             fig.patch.set_facecolor("#111")
 
-    animation.FuncAnimation(fig, draw_frame, frames=len(frames),
-                            interval=int(1000/args.fps), repeat=True)
+    ani = animation.FuncAnimation(fig, draw_frame, frames=len(frames),
+                                  interval=int(1000/args.fps), repeat=True)
     plt.show()
 
 if __name__ == "__main__":

@@ -147,8 +147,8 @@ def main():
 
         count_text.set_text(f"Alerts: {alert_count[0]}")
 
-    animation.FuncAnimation(fig, draw_frame, frames=len(frames),
-                            interval=int(1000/args.fps), repeat=True)
+    ani = animation.FuncAnimation(fig, draw_frame, frames=len(frames),
+                                  interval=int(1000/args.fps), repeat=True)
     plt.show()
 
 if __name__ == "__main__":
