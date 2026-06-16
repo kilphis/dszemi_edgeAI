@@ -1,0 +1,24 @@
+# --- 認証情報・シークレット ---
+.env
+config/
+
+# --- 推論データ・大きなデータ ---
+data/
+
+# --- スクリプト生成画像 ---
+output/
+*.png
+
+# --- Python キャッシュ ---
+__pycache__/
+*.py[cod]
+*.pyo
+.uv/
+.venv/
+
+# --- macOS ---
+.DS_Store
+**/.DS_Store
+
+# --- Jupyter ---
+.ipynb_checkpoints/
