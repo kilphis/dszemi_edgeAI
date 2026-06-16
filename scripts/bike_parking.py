@@ -256,15 +256,15 @@ def plot_heatmap(all_dets: list[list[Detection]]) -> None:
                 grid[d.y1:d.y2, d.x1:d.x2] += 1
 
     plt.figure(figsize=(6, 6))
-    plt.imshow(grid, cmap="hot", origin="upper")
-    plt.colorbar(label="Cumulative detection count")
+    plt.imshow(grid, cmap="Blues", origin="upper")
+    plt.colorbar(label="Detection count (frames)")
     for z in NO_PARKING_ZONES:
         poly = patches.Polygon(z["polygon"], closed=True,
-                               linewidth=2, edgecolor="cyan", facecolor="none", linestyle="--")
+                               linewidth=2, edgecolor="#e05c00", facecolor="none", linestyle="--")
         plt.gca().add_patch(poly)
         px, py = z["polygon"][0]
-        plt.text(px, py - 5, z["name"], color="cyan", fontsize=8)
-    plt.title("Bicycle Heatmap (cyan = no-parking zone)")
+        plt.text(px, py - 5, z["name"], color="#e05c00", fontsize=8, weight="bold")
+    plt.title("Bicycle Detection Density  (orange = no-parking zone)")
     plt.axis("off")
     plt.tight_layout()
     out = os.path.join(OUTPUT_DIR, "bike_heatmap.png")
