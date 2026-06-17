@@ -1,90 +1,103 @@
 # EdgeAI 駐輪場監視システム
 
-Sony AITRIOS エッジAIカメラを使った自転車の放置・違法駐輪検出システム。熊本市の駐輪場への設置を想定したDSゼミプロジェクト。
+Sony AITRIOS エッジAIカメラを使った自転車の放置・違法駐輪検出システム。  
+熊本市の駐輪場への設置を想定した DSゼミプロジェクト（16班）。
 
-## プロジェクト概要
+## 概要
 
-AITRIOS カメラが出力する物体検出推論データ（FlatBuffers → JSON）を解析し、以下の2つの異常を検出する。
+AITRIOS カメラがエッジ推論した結果（FlatBuffers → JSON）を解析し、2種類の異常を検出する。
 
-- **違法駐輪（ILLEGAL_PARK）**: 自転車が禁止ゾーンと重なっている
-- **放置（ABANDONED）**: 自転車が閾値時間（デフォルト60分）以上同じ場所に留まっている
+| 機能 | 説明 |
+|---|---|
+| **違法駐輪検出** | 自転車が禁止ゾーン（ポリゴン定義）に入ったらアラート |
+| **放置自転車検出** | 同一個体が閾値時間以上同じ場所に留まったらアラート |
+| **ヒートマップ** | 自転車の滞留密度を320×320グリッドで可視化 |
 
 ## ディレクトリ構成
 
 ```
-SmartCamera/                   Sony提供のFlatBuffers推論デシリアライズライブラリ
-background/                    駐輪場の参照写真（3枚 JPG）
-data/handson_0602/
-  images/                      ハンズオン用撮影画像（30枚 JPG、カラス検出データ）
-  inferences/
-    deserialized_inferences/   推論JSONファイル
-    serialized_inferences/     FlatBuffers形式の生データ
-notebooks/
-  ds1ai_app.ipynb              Sony AITRIOSハンズオン用 Colab ノートブック（オリジナル）
-  ds1ai_api2gdrive.ipynb       Google Drive連携ノートブック
-presen/                        スライド・発表資料
-sample_train/                  自転車検出モデルの学習用サンプル画像（24枚）
-scripts/
-  ds1ai_app.py                 ハンズオンノートブックをローカル実行用に移植
-  bike_parking.py              本命：駐輪場監視パイプライン（自転車追跡・違法駐輪検出）
-提出課題など/                  授業提出物・ノート
-_mermaid/dif.md                システム全体のMermaid図（データフロー・クラス図）
-_todo.md                       TODOリスト
+.
+├── scripts/
+│   ├── tracker.py              ★ 追跡ロジック（モジュール）naive / greedy
+│   ├── bike_parking.py         メインパイプライン（ヒートマップ・BB重畳・カウント）
+│   ├── demo.py                 違法ゾーン侵入のリアルタイムデモ
+│   ├── demo_abandoned.py       放置タイマーバーのリアルタイムデモ
+│   ├── eval_tracker.py         追跡アルゴリズム比較（naive vs greedy）
+│   ├── download_inferences.py  AITRIOS API からデータ取得・保存
+│   ├── pick_zone.py            禁止ゾーン座標をクリックで取得するツール
+│   ├── explain_heatmap.py      ヒートマップの仕組み説明図を生成
+│   └── ds1ai_app.py            ⚠ レガシー（ハンズオン用ノートブックの移植版）
+│
+├── notebooks/
+│   └── ds1ai_api2gdrive.ipynb  ⚠ レガシー（AITRIOS → Google Drive 連携 Colab ノートブック）
+│
+├── SmartCamera/                Sony 提供 FlatBuffers デシリアライズライブラリ
+├── presen/                     スライド・発表資料
+│   ├── appendix/               技術者向け補足資料
+│   └── mermaid/                システム図（PNG）
+│
+├── _mermaid/dif.md             Mermaid 図のソース
+├── _todo.md                    TODO リスト
+│
+│   ── git 管理外 ──────────────────────────────────────────
+├── config/                     AITRIOS 認証情報（clientID / secretID / deviceID）
+├── data/                       カメラ画像 & 推論 JSON
+└── output/                     スクリプト生成画像
 ```
 
-git 管理外（`.gitignore` で除外）:
+## 実行方法
 
-| パス | 内容 |
-|------|------|
-| `config/` | AITRIOS認証情報（clientID, secretID, token等） |
-| `.env` | APIキー |
-| `output/` | スクリプト生成画像 |
-| `*.png` | 画像ファイル全般 |
-
-## セットアップ＆実行
-
-Python 環境は `uv` を使用する。依存パッケージは各スクリプト内のインポートから自動解決される。
+Python 環境は `uv` を使用する（`python` 直接実行不可）。
 
 ```bash
-# ハンズオンデータ（カラス検出）で動作確認
-uv run --no-project scripts/ds1ai_app.py
+# データ取得（AITRIOS API）
+uv run --no-project scripts/download_inferences.py
 
-# 駐輪場監視パイプライン（本命）
+# メインパイプライン（ヒートマップ・BB重畳画像を output/ に保存）
 uv run --no-project scripts/bike_parking.py
+
+# デモ（インタラクティブ表示）
+uv run --no-project scripts/demo.py
+uv run --no-project scripts/demo_abandoned.py --threshold 30
+
+# デモ画像を output/ に保存（スライド用）
+uv run --no-project scripts/demo_abandoned.py --threshold 30 --strategy greedy --save-frames 6
+
+# 追跡アルゴリズムの比較
+uv run --no-project scripts/eval_tracker.py --threshold 30
+
+# 禁止ゾーン座標の取得（実際のカメラ画像をクリック）
+uv run --no-project scripts/pick_zone.py
 ```
 
-出力画像は `output/` に保存される（git 管理外）。
+## 追跡アルゴリズム
 
-### AITRIOS 認証情報の準備
+AITRIOS の推論出力はフレームをまたぐ個体 ID を持たないため、座標近傍マッチングで自前実装している。
 
-`config/` ディレクトリは git 管理外のため、自分で用意する必要がある。AITRIOS ポータルから取得した認証情報を以下のように配置する。
+| strategy | 方式 | 特徴 |
+|---|---|---|
+| `naive` | リスト先頭から走査 | 旧実装。リスト順に依存した誤マッチが起きる |
+| `greedy` | 全ペア距離→近い順に割り当て | 最も近いペアが優先される（推奨） |
+
+`--strategy` オプションで切り替え可能。詳細は `presen/appendix/tracking_algorithms.md` を参照。
+
+## 認証情報のセットアップ
+
+`config/` は git 管理外のため各自で用意する。
 
 ```
 config/
-  client_id
-  client_secret
-  token_url
-  （その他 AITRIOS が要求するファイル）
+  clientID.txt    AITRIOS クライアント ID
+  secretID.txt    AITRIOS クライアントシークレット
+  deviceID.txt    カメラのデバイス ID
 ```
 
-## 設定変更のポイント（STUB）
+## 禁止ゾーンの設定
 
-自転車の実データが届いたら `scripts/bike_parking.py` の以下の箇所を変更する。
+カメラが斜め撮影のため、ゾーンはポリゴン（多角形）で定義する。
 
-| 変数 | 現在の値（仮） | 変更内容 |
-|------|--------------|---------|
-| `DATA_DIR` | `data/handson_0602/.../deserialized_inferences` | 自転車推論JSONのディレクトリに変更 |
-| `class_map` | `{0: "bicycle", 1: "obstacle"}` | モデルのクラスIDに合わせて修正 |
-| `NO_PARKING_ZONES` | 仮の左端・右端エリア（0〜320スケール） | `background/` の参照写真をもとに実座標を設定 |
-| `STAY_TIME_THRESHOLD_MINUTES` | `60`（分） | 運用要件に合わせて調整 |
-
-### 推論JSONのフォーマット
-
-```json
-{
-  "T": "2026-06-02T02:27:45.222Z",
-  "0": {"C": 0, "P": 0.85, "X": 50, "Y": 30, "x": 120, "y": 200}
-}
+```bash
+uv run --no-project scripts/pick_zone.py  # 実画像をクリックして頂点を取得
 ```
 
-座標（`X`, `Y`, `x`, `y`）は 0〜320 のスケール。`C` はクラスID、`P` は確信度。
+取得した座標を `scripts/bike_parking.py` と `scripts/demo.py` の `NO_PARKING_ZONES` に貼り付ける。

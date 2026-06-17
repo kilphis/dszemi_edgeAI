@@ -1,118 +1,118 @@
-# Mermaid 図集
+# Mermaid 図集（最新版）
 
-## 図1: スクリプト全体像
-
-```mermaid
-flowchart TB
-    subgraph IN["入力"]
-        JSON["data/handson_0602/inferences/\ndeserialized_inferences/*.json\n───\nT: タイムスタンプ\nC: クラスID\nP: 確信度\nX,Y: 左上座標 (0-320)\nx,y: 右下座標 (0-320)"]
-        IMG["data/handson_0602/images/*.jpg"]
-    end
-
-    subgraph DS1["ds1ai_app.py（ハンズオンノートブック移植）"]
-        D1["① load_inference_data()\n   JSON 全件読み込み・時刻順ソート"]
-        D2["② convert_to_df()\n   クラス別カウント集計 → DataFrame"]
-        D3["③ 時系列グラフ描画\n   閾値超えフレームをハイライト"]
-        D4["④ find_matching_image()\n   タイムスタンプ近傍で画像とJSONを対応付け"]
-        D5["⑤ BB・ラベルを画像に重畳"]
-        D1 --> D2 --> D3
-        D1 --> D4 --> D5
-    end
-
-    subgraph BK["bike_parking.py（本命パイプライン）"]
-        B1["① load_frames()\n   JSON 全件読み込み"]
-        B2["② parse_detections()\n   bicycle クラスのみ抽出\n   → Detection オブジェクト列"]
-        B3["③ run_tracking()\n   座標近傍マッチングで同一個体を追跡\n   → TrackedBike リスト"]
-        B4{"④ アラート判定\n（フレームごと）"}
-        B5["calc_iou()\n禁止ゾーンとBBの重なり判定\n⚠️ NO_PARKING_ZONES は STUB"]
-        B6["滞在時間 = last_seen − first_seen\n⚠️ 閾値60分は STUB"]
-        B7["⑤ plot_count_timeline()"]
-        B8["⑤ plot_heatmap()\n各座標の検出累積をヒートマップ化"]
-        B9["⑤ overlay_frame()\nBB＋ゾーン＋ILLEGAL/OK を重畳"]
-        B1 --> B2 --> B3 --> B4
-        B4 --> B5 -->|"IoU ≥ 0.1"| ILLEGAL["🚨 ILLEGAL_PARK"]
-        B4 --> B6 -->|"≥ 60分"| ABANDON["🚨 ABANDONED"]
-        B3 --> B7
-        B3 --> B8
-        B3 & ILLEGAL & ABANDON --> B9
-    end
-
-    subgraph OUT["output/"]
-        O1["output_count.png\n(ds1ai_app)"]
-        O2["output_frame_NNN.png\n(ds1ai_app)"]
-        O3["bike_count.png"]
-        O4["bike_heatmap.png"]
-        O5["bike_frame_NNN.png"]
-    end
-
-    JSON --> DS1 --> O1 & O2
-    IMG  --> DS1
-    JSON --> BK  --> O3 & O4 & O5
-    IMG  --> BK
-
-    style ILLEGAL fill:#f88,stroke:#c00
-    style ABANDON  fill:#fa8,stroke:#c60
-```
-
----
-
-## 図2: bike_parking.py のデータ構造
-
-```mermaid
-classDiagram
-    class Detection {
-        +int frame_idx
-        +datetime timestamp
-        +int class_id
-        +float prob
-        +int x1, y1
-        +int x2, y2
-        +float cx()
-        +float cy()
-    }
-
-    class TrackedBike {
-        +int track_id
-        +datetime first_seen
-        +datetime last_seen
-        +float last_cx, last_cy
-        +bool illegal
-        +bool alert_sent
-    }
-
-    class Event {
-        type: ILLEGAL_PARK or ABANDONED
-        track_id: int
-        timestamp: datetime
-        cx, cy: float
-    }
-
-    Detection --> TrackedBike : match_track() 座標距離 30px 以内で同一判定
-    TrackedBike --> Event : アラート条件を満たしたら生成
-```
-
----
-
-## 図3: STUB（自転車データが来たら変えるところ）
+## 図1: scripts/ 全体のデータフロー
 
 ```mermaid
 flowchart LR
-    subgraph NOW["現在（カラスデータで動作確認中）"]
-        S1["DATA_DIR\n= data/handson_0602/..."]
-        S2["class_map\n= {0: bicycle, 1: obstacle}"]
-        S3["NO_PARKING_ZONES\n= 仮の左端・右端エリア"]
-        S4["STAY_TIME_THRESHOLD\n= 60分"]
+    subgraph SRC["外部"]
+        direction TB
+        API["🌐 AITRIOS API"]
+        BG["📷 background.jpg"]
     end
 
-    subgraph REAL["自転車データ到着後に変える"]
-        R1["DATA_DIR\n= data/bike_XXXX/..."]
-        R2["class_map\n= {モデルのクラス番号: bicycle}"]
-        R3["NO_PARKING_ZONES\n= background/ の画像を見て\n実座標を 0〜320 に換算"]
-        R4["STAY_TIME_THRESHOLD\n= 要件に合わせて調整"]
+    subgraph STORE["data/  (git管理外)"]
+        direction TB
+        IMG[("images/\n*.jpg")]
+        JSON[("inferences/\nT・C・P・X,Y・x,y\n座標系 0〜320")]
     end
 
-    S1 -.->|変更| R1
-    S2 -.->|変更| R2
-    S3 -.->|変更| R3
-    S4 -.->|調整| R4
+    TRK["tracker.py ★\n────────────\nTrack dataclass\nnaive ／ greedy\nrun_tracking()"]
+
+    subgraph ANALYSIS["分析・可視化"]
+        direction TB
+        BP["bike_parking.py\nヒートマップ / BB重畳 / カウント推移"]
+        EXP["explain_heatmap.py\nヒートマップ仕組み説明図"]
+    end
+
+    subgraph DEMO["デモ"]
+        direction TB
+        D["demo.py\n違法ゾーン侵入をリアルタイム表示"]
+        DA["demo_abandoned.py\n放置タイマーバー表示\n--strategy / --save-frames"]
+    end
+
+    subgraph TOOLS["ツール・評価"]
+        direction TB
+        DL["download_inferences.py\nAPIからデータ取得・保存"]
+        PK["pick_zone.py\n画像クリックでゾーン座標取得"]
+        EV["eval_tracker.py\nnaive vs greedy 比較"]
+    end
+
+    subgraph OUT["output/  (git管理外)"]
+        direction TB
+        O1["bike_heatmap.png\nbike_count.png\nbike_frame_*.png"]
+        O2["explain_heatmap.png"]
+        O3["demo_abandoned_*.png"]
+    end
+
+    TERM(["ターミナル\neval結果 / zone座標"])
+
+    API -->|"GET /images\nGET /inferences"| DL
+    DL --> IMG & JSON
+    BG --> PK --> TERM
+
+    JSON & IMG --> BP & D & DA & EV & EXP
+
+    TRK -.->|import| BP
+    TRK -.->|import| DA
+    TRK -.->|import| EV
+
+    BP --> O1
+    EXP --> O2
+    DA -->|"--save-frames"| O3
+    EV --> TERM
+
+    style TRK fill:#1a3a6a,color:#fff,stroke:#4a8abf,stroke-width:2px
+    style TERM fill:#1a2a1a,color:#8f8,stroke:#4a8a4a
+```
+
+---
+
+## 図2: tracker.py 内部の構造
+
+```mermaid
+flowchart LR
+    subgraph IN["入力"]
+        F["frames: list[dict]\n（推論JSON そのまま）"]
+        PARAMS["strategy: naive|greedy\ndead_after: int\nthreshold_sec: float\nis_illegal_fn: callable"]
+    end
+
+    subgraph TRACKER["tracker.py / run_tracking()"]
+        PARSE["各フレームの検出を\n辞書リストに変換\n(cx, cy, x1, y1, x2, y2)"]
+
+        subgraph MATCH["マッチング戦略（切替可）"]
+            NAIVE["_match_naive()\n先頭から走査→最初の30px以内"]
+            GREEDY["_match_greedy()\n全ペア距離計算→近い順割り当て"]
+        end
+
+        ASSIGN["新規 or 既存トラックに割り当て"]
+        DEAD["dead_after フレーム未検出\n→ alive=False（消滅）"]
+        EVENT["アラート判定\nILLEGAL_PARK\nABANDONED"]
+    end
+
+    subgraph OUT["戻り値（3つ同時）"]
+        T["tracks: list[Track]\n全トラック（dead含む）"]
+        S["snapshots: list[list[tuple]]\nフレームごとのスナップショット\n→ demo_abandoned.py が使う"]
+        E["events: list[dict]\n→ bike_parking.py が使う"]
+    end
+
+    F & PARAMS --> PARSE --> MATCH --> ASSIGN --> DEAD --> EVENT
+    EVENT --> T & S & E
+
+    style GREEDY fill:#2a4a2a,color:#8f8,stroke:#4a7a4a
+    style NAIVE  fill:#4a2a2a,color:#f88,stroke:#7a4a4a
+```
+
+---
+
+## 図3: Track のライフサイクル
+
+```mermaid
+stateDiagram-v2
+    [*] --> alive : 初めて検出（新規 Track 登録）
+    alive --> alive : 次フレームで30px以内に再検出 → stay_sec 更新
+    alive --> missing : フレームで未検出（frames_missing += 1）
+    missing --> alive : 次フレームで再検出
+    missing --> dead : frames_missing ≥ dead_after → alive = False
+    alive --> abandoned : stay_sec ≥ threshold_sec → ABANDONED イベント発火
+    dead --> [*]
 ```

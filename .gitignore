@@ -9,6 +9,11 @@ data/
 output/
 *.png
 
+# presen/ の画像は発表資料なので管理対象にする
+!presen/**/*.png
+!presen/**/*.jpg
+!presen/**/*.JPG
+
 # --- Python キャッシュ ---
 __pycache__/
 *.py[cod]

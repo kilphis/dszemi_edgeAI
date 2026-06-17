@@ -13,7 +13,6 @@
 """
 
 import os, sys, json, argparse
-from dataclasses import dataclass
 from datetime import datetime
 
 import pandas as pd
@@ -23,67 +22,16 @@ import matplotlib.animation as animation
 from PIL import Image
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tracker.py を import するため
+
+from tracker import run_tracking
 
 DATA_DIR  = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-000000000cc9",
                          "20260616013730349", "inferences", "deserialized_inferences")
 IMAGE_DIR = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-000000000cc9",
                          "20260616013730349", "images")
 
-BICYCLE_CLASS_ID   = 0
-COORD_MATCH_RADIUS = 30
-
-
-@dataclass
-class Track:
-    track_id: int
-    first_seen: datetime
-    last_seen: datetime
-    last_cx: float
-    last_cy: float
-    stay_sec: float = 0.0
-    abandoned: bool = False
-
-
-def precompute(frames, threshold_sec):
-    """全フレームを先読みしてトラック情報をスナップショットに変換する。"""
-    tracks: list[Track] = []
-    next_id = 0
-    snapshots = []
-
-    for frame in frames:
-        ts = pd.to_datetime(frame["T"]).to_pydatetime()
-        snap = []
-
-        for k, v in frame.items():
-            if k == "T" or not isinstance(v, dict):
-                continue
-            if v.get("C") != BICYCLE_CLASS_ID:
-                continue
-            cx = (v["X"] + v["x"]) / 2
-            cy = (v["Y"] + v["y"]) / 2
-
-            matched = None
-            for t in tracks:
-                if ((cx-t.last_cx)**2 + (cy-t.last_cy)**2)**0.5 <= COORD_MATCH_RADIUS:
-                    matched = t
-                    break
-
-            if matched:
-                matched.last_seen = ts
-                matched.last_cx, matched.last_cy = cx, cy
-                matched.stay_sec = (ts - matched.first_seen).total_seconds()
-                matched.abandoned = matched.stay_sec >= threshold_sec
-            else:
-                matched = Track(next_id, ts, ts, cx, cy)
-                tracks.append(matched)
-                next_id += 1
-
-            snap.append((matched.track_id, matched.stay_sec, matched.abandoned,
-                         v["X"], v["Y"], v["x"], v["y"]))
-
-        snapshots.append(snap)
-
-    return snapshots
+BICYCLE_CLASS_ID = 0
 
 
 def load_data():
@@ -107,14 +55,18 @@ def find_image(frame_ts, img_files):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--fps",       type=float, default=1)
-    parser.add_argument("--threshold", type=float, default=60,
+    parser.add_argument("--fps",         type=float, default=1)
+    parser.add_argument("--threshold",   type=float, default=60,
                         help="放置判定の秒数（デフォルト60秒）")
+    parser.add_argument("--strategy",    default="naive", choices=["naive", "greedy"],
+                        help="追跡アルゴリズム（naive=旧実装 / greedy=改良版）")
+    parser.add_argument("--save-frames", type=int, default=0, metavar="N",
+                        help="アニメーションを表示せず最初の N フレームを output/ に保存する")
     args = parser.parse_args()
 
     frames, img_files = load_data()
-    snapshots = precompute(frames, args.threshold)
-    print(f"フレーム数: {len(frames)}  放置閾値: {args.threshold}秒")
+    _, snapshots, _ = run_tracking(frames, threshold_sec=args.threshold, strategy=args.strategy)
+    print(f"フレーム数: {len(frames)}  放置閾値: {args.threshold}秒  strategy: {args.strategy}")
 
     fig, ax = plt.subplots(figsize=(7, 7))
     fig.patch.set_facecolor("#111")
@@ -195,9 +147,23 @@ def main():
             alert_text.set_text("")
             fig.patch.set_facecolor("#111")
 
-    ani = animation.FuncAnimation(fig, draw_frame, frames=len(frames),
-                                  interval=int(1000/args.fps), repeat=True)
-    plt.show()
+    if args.save_frames > 0:
+        import matplotlib
+        matplotlib.use("Agg")
+        out_dir = os.path.join(PROJECT_ROOT, "output")
+        os.makedirs(out_dir, exist_ok=True)
+        n = min(args.save_frames, len(frames))
+        for fi in range(n):
+            draw_frame(fi)
+            ts_str = pd.to_datetime(frames[fi]["T"]).strftime("%H%M%S")
+            path = os.path.join(out_dir, f"demo_abandoned_{args.strategy}_f{fi+1:02d}_{ts_str}.png")
+            fig.savefig(path, dpi=120, facecolor=fig.get_facecolor())
+            print(f"保存: {path}")
+        plt.close(fig)
+    else:
+        ani = animation.FuncAnimation(fig, draw_frame, frames=len(frames),
+                                      interval=int(1000/args.fps), repeat=True)
+        plt.show()
 
 if __name__ == "__main__":
     main()

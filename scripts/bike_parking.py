@@ -29,6 +29,9 @@ from datetime import datetime
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUTPUT_DIR   = os.path.join(PROJECT_ROOT, "output")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # tracker.py を import するため
+
+from tracker import run_tracking as _run_tracking, COORD_MATCH_RADIUS as _COORD_MATCH_RADIUS
 
 # =====================================================================
 # [STUB 1] 推論データのパス
@@ -67,7 +70,7 @@ NO_PARKING_ZONES: list[dict] = [
 # [STUB 4] 放置自転車の判定パラメータ
 # =====================================================================
 STAY_TIME_THRESHOLD_MINUTES = 60   # この時間（分）を超えたら放置とみなす
-COORD_MATCH_RADIUS = 30            # 同一自転車と判定する座標ズレの許容値（px, 0〜320基準）
+COORD_MATCH_RADIUS = _COORD_MATCH_RADIUS  # tracker.py の値を参照（変更は tracker.py で行う）
 # =====================================================================
 
 
@@ -94,17 +97,6 @@ class Detection:
         return (self.y1 + self.y2) / 2
 
 
-@dataclass
-class TrackedBike:
-    track_id: int
-    first_seen: datetime
-    last_seen: datetime
-    last_cx: float
-    last_cy: float
-    alert_sent: bool = False
-    illegal: bool = False
-
-
 # -----------------------------------------------------------------
 # ユーティリティ
 # -----------------------------------------------------------------
@@ -122,17 +114,14 @@ def point_in_polygon(px: float, py: float, polygon: list[tuple]) -> bool:
     return inside
 
 
+def is_illegal_pos(cx: float, cy: float) -> bool:
+    """重心(cx,cy)がいずれかの禁止ゾーンポリゴン内にあれば True。"""
+    return any(point_in_polygon(cx, cy, z["polygon"]) for z in NO_PARKING_ZONES)
+
+
 def is_illegal(det: Detection) -> bool:
-    """検出の重心(cx,cy)がいずれかの禁止ゾーンポリゴン内にあれば違法。"""
-    return any(point_in_polygon(det.cx, det.cy, z["polygon"]) for z in NO_PARKING_ZONES)
-
-
-def match_track(det: Detection, tracks: list[TrackedBike]) -> TrackedBike | None:
-    for t in tracks:
-        dist = ((det.cx - t.last_cx) ** 2 + (det.cy - t.last_cy) ** 2) ** 0.5
-        if dist <= COORD_MATCH_RADIUS:
-            return t
-    return None
+    """Detection オブジェクトからの便利ラッパー（overlay_frame で使用）。"""
+    return is_illegal_pos(det.cx, det.cy)
 
 
 # -----------------------------------------------------------------
@@ -171,58 +160,21 @@ def parse_detections(frames: list[dict]) -> list[list[Detection]]:
 
 
 # -----------------------------------------------------------------
-# トラッキング
+# トラッキング（tracker.py に移管済み）
 # -----------------------------------------------------------------
-def run_tracking(all_dets: list[list[Detection]]) -> tuple[list[TrackedBike], list[dict]]:
-    tracks: list[TrackedBike] = []
-    events: list[dict] = []
-    next_id = 0
-
-    for frame_dets in all_dets:
-        bike_dets = [d for d in frame_dets if d.class_id == BICYCLE_CLASS_ID]
-        matched_track_ids = set()
-
-        for det in bike_dets:
-            track = match_track(det, [t for t in tracks if t.track_id not in matched_track_ids])
-            if track is None:
-                track = TrackedBike(
-                    track_id=next_id,
-                    first_seen=det.timestamp,
-                    last_seen=det.timestamp,
-                    last_cx=det.cx,
-                    last_cy=det.cy,
-                )
-                tracks.append(track)
-                next_id += 1
-            else:
-                track.last_seen = det.timestamp
-                track.last_cx = det.cx
-                track.last_cy = det.cy
-
-            matched_track_ids.add(track.track_id)
-
-            stay_min = (track.last_seen - track.first_seen).total_seconds() / 60
-            illegal = is_illegal(det)
-
-            if illegal and not track.illegal:
-                track.illegal = True
-                events.append({
-                    "type": "ILLEGAL_PARK",
-                    "track_id": track.track_id,
-                    "timestamp": det.timestamp,
-                    "cx": det.cx, "cy": det.cy,
-                })
-
-            if stay_min >= STAY_TIME_THRESHOLD_MINUTES and not track.alert_sent:
-                track.alert_sent = True
-                events.append({
-                    "type": "ABANDONED",
-                    "track_id": track.track_id,
-                    "timestamp": det.timestamp,
-                    "stay_minutes": stay_min,
-                    "cx": det.cx, "cy": det.cy,
-                })
-
+def run_tracking(frames, *, strategy="naive"):
+    """tracker.py の run_tracking への薄いラッパー。"""
+    tracks, _snapshots, events = _run_tracking(
+        frames,
+        bicycle_class_id=BICYCLE_CLASS_ID,
+        strategy=strategy,
+        threshold_sec=STAY_TIME_THRESHOLD_MINUTES * 60,
+        is_illegal_fn=is_illegal_pos,
+    )
+    # events の stay_sec → stay_minutes に変換（bike_parking.py の出力形式を維持）
+    for e in events:
+        if e["type"] == "ABANDONED" and "stay_sec" in e:
+            e["stay_minutes"] = e.pop("stay_sec") / 60
     return tracks, events
 
 
@@ -361,7 +313,7 @@ def main() -> None:
     print(f"自転車検出総数: {total_bikes}")
 
     print("\nトラッキング実行中...")
-    tracks, events = run_tracking(all_dets)
+    tracks, events = run_tracking(frames)   # frames を渡す（tracker.py が内部でパース）
     print(f"追跡した自転車ユニーク数: {len(tracks)}")
 
     if events:

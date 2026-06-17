@@ -1,0 +1,3 @@
+# Jupyter Notebook を GitHub の言語統計から除外する
+# （出力セルのBase64データでバイト数が膨らみ、Python より大きく見えるため）
+notebooks/*.ipynb linguist-documentation
