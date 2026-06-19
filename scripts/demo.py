@@ -84,6 +84,7 @@ def main():
     count_text = fig.text(0.02, 0.96, "", ha="left", va="top",
                           fontsize=10, color="white", transform=fig.transFigure)
     alert_count = [0]
+    illegal_prev = [False]  # 前フレームが違法駐輪かどうか
 
     def draw_frame(fi):
         ax.cla()
@@ -137,13 +138,17 @@ def main():
             ax.text(x1, y1-10, label, color=color, fontsize=9, fontweight="bold",
                     bbox=dict(facecolor="#111", edgecolor="none", alpha=0.6, pad=1))
 
-        if frame_illegal:
+        # 前フレームが違法駐輪だった場合にアラート表示（1フレーム遅延）
+        if illegal_prev[0]:
             alert_count[0] += 1
             alert_text.set_text("!  ILLEGAL PARKING DETECTED  !")
             fig.patch.set_facecolor("#2a0000")
         else:
             alert_text.set_text("")
             fig.patch.set_facecolor("#111")
+
+        # 今フレームの状態を次回のために記憶
+        illegal_prev[0] = frame_illegal
 
         count_text.set_text(f"Alerts: {alert_count[0]}")
 
