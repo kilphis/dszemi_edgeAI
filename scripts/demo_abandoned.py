@@ -30,6 +30,7 @@ DATA_DIR  = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-0000
                          "20260616013730349", "inferences", "deserialized_inferences")
 IMAGE_DIR = os.path.join(PROJECT_ROOT, "data", "Aid-80070001-0000-2000-9002-000000000cc9",
                          "20260616013730349", "images")
+DEMO_VIDEO_FRAMES_DIR = os.path.join(PROJECT_ROOT, "data", "demo_video", "frames")
 
 BICYCLE_CLASS_ID = 0
 
@@ -51,6 +52,13 @@ def find_image(frame_ts, img_files):
         if diff < best_diff:
             best, best_diff = fn, diff
     return best
+
+def get_demo_video_frame(frame_index, num_frames):
+    """推論フレーム番号をデモ動画フレーム番号にスケーリング"""
+    demo_frame_idx = int(frame_index * 1799 / num_frames) + 1  # frame_000001.jpg から開始
+    frame_file = f"frame_{demo_frame_idx:06d}.jpg"
+    frame_path = os.path.join(DEMO_VIDEO_FRAMES_DIR, frame_file)
+    return frame_path if os.path.exists(frame_path) else None
 
 
 def main():
@@ -85,14 +93,22 @@ def main():
         frame = frames[fi]
         snap  = snapshots[fi]
         frame_ts = pd.to_datetime(frame["T"])
-        img_fn   = find_image(frame_ts, img_files)
 
-        if img_fn:
-            img = Image.open(os.path.join(IMAGE_DIR, img_fn))
+        # デモ動画フレームを優先的に使う
+        demo_frame_path = get_demo_video_frame(fi, len(frames))
+        if demo_frame_path:
+            img = Image.open(demo_frame_path)
             W, H = img.size
             ax.imshow(img)
         else:
-            W, H = 320, 320
+            # フォールバック：元のカメラ画像を使う
+            img_fn = find_image(frame_ts, img_files)
+            if img_fn:
+                img = Image.open(os.path.join(IMAGE_DIR, img_fn))
+                W, H = img.size
+                ax.imshow(img)
+            else:
+                W, H = 320, 320
 
         ax.set_title(f"Frame {fi+1}/{len(frames)}   {frame_ts.strftime('%H:%M:%S')}",
                      fontsize=10, color="white", pad=6,
